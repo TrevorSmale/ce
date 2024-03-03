@@ -1,0 +1,76 @@
+---
+# Playbook to provision a Kubernetes machine with Traefik reverse proxy on Debian 12 using Podman
+
+# Define the hosts where the tasks will be executed
+hosts: kubernetes_machine
+
+# Set remote user and become method for privilege escalation
+remote_user: your_remote_user
+become: true
+
+# List of tasks to be executed
+tasks:
+  - name: Update apt cache
+    apt:
+      update_cache: yes
+    # Ensure the apt cache is updated before installing packages
+
+  - name: Install required packages for Podman and Kubernetes
+    apt:
+      name: "{{ item }}"
+      state: present
+    loop:
+      - apt-transport-https
+      - ca-certificates
+      - curl
+      - gnupg
+      - lsb-release
+      - software-properties-common
+      - podman
+      - kubelet
+      - kubeadm
+      - kubectl
+    # Install necessary packages for Podman and Kubernetes
+
+  - name: Enable and start Podman service
+    service:
+      name: podman
+      state: started
+      enabled: yes
+    # Ensure Podman service is enabled and started
+
+  - name: Initialize Kubernetes cluster
+    command: kubeadm init --pod-network-cidr=192.168.0.0/16
+    register: kubeadm_output
+    # Initialize Kubernetes cluster with a specified pod network CIDR
+
+  - name: Set up kubeconfig for non-root user
+    command: "{{ item }}"
+    loop:
+      - mkdir -p $HOME/.kube
+      - cp -i /etc/kubernetes/admin.conf $HOME/.kube/config
+      - chown $(id -u):$(id -g) $HOME/.kube/config
+    when: kubeadm_output.rc == 0
+    # Set up kubeconfig for non-root user to access the cluster
+
+  - name: Deploy Flannel network addon for pod networking
+    become: false
+    when: kubeadm_output.rc == 0
+    # Deploy Flannel network addon for pod networking (Can be replaced with other network addons like Calico or Weave)
+
+  - name: Label the node as a worker
+    command: kubectl taint nodes --all node-role.kubernetes.io/master-
+    when: kubeadm_output.rc == 0
+    # Label the node as a worker to allow running pods on it
+
+  - name: Install Traefik using Helm
+    community.kubernetes.helm:
+      name: traefik
+      chart_ref: traefik/traefik
+      repo_url: https://helm.traefik.io/traefik
+      version: "10.5.3"
+      namespace: kube-system
+      values_files:
+        - traefik-values.yaml
+    when: kubeadm_output.rc == 0
+    # Install Traefik reverse proxy using Helm chart
