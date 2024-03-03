@@ -1,5 +1,5 @@
 # ce (Cloud Engineering)
-Personal Template for Cloud Engineering Projects
+Personal Templates for Cloud Engineering Projects
 
 ## Reference Templates
 for creating/provisioning cloud infrastructure.
